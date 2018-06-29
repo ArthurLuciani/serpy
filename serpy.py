@@ -61,6 +61,7 @@ class Connection:
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.conn.connect(self.adr)
         self.connected = True
+        self.start()
 
     def start(self):
         self.stop_sig = False
@@ -92,7 +93,6 @@ class Connection:
             print("Attempting connection restart")
             self.close()
             self.connect(*self.adr)
-            self.start()
             print("finished")
         else :
             Warning("Closing connection")
@@ -266,6 +266,7 @@ class Server:
     def start(self):
         self.tSer = threading.Thread(target=self.serverThread)
         self.tSer.start()
+        return self
     
     def close(self):
         self.stop_sig = True
