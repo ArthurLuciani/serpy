@@ -63,6 +63,7 @@ class Connection:
         self.connected = True
 
     def start(self):
+        self.stop_sig = False
         threadSet = set()
         threadSet.add(threading.Thread(target=self.inThread))
         threadSet.add(threading.Thread(target=self.outThread))
@@ -88,10 +89,11 @@ class Connection:
 
     def _brokenConnHandler(self):
         if self.auto_restart :
-            Warning("Attempting connection restart")
+            print("Attempting connection restart")
             self.close()
             self.connect(*self.adr)
             self.start()
+            print("finished")
         else :
             Warning("Closing connection")
             self.close()
