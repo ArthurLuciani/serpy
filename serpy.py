@@ -32,7 +32,7 @@ from base64 import b85encode, b85decode
 
 STIMEOUT = 0.020
 
-class Connection():
+class Connection:
     """
     pass
     """
@@ -41,10 +41,10 @@ class Connection():
         self.encoding = encoding
         self.auto_restart = auto_restart
         self.connected = conn != None
-        self.in_q = queue.queue(10)
-        self.out_q = queue.queue(10)
-        self.block_q = queue.queue(64)
-        self.out_block_q = queue.queue(64)
+        self.in_q = queue.Queue(10)
+        self.out_q = queue.Queue(10)
+        self.block_q = queue.Queue(64)
+        self.out_block_q = queue.Queue(64)
         self.stop_sig = False
         self.in_mode = 0
         self.out_mode = 0
@@ -213,7 +213,7 @@ class Connection():
 
 
 
-class Server():
+class Server:
     """
     33
     """
@@ -228,23 +228,11 @@ class Server():
         self.serv.bind((adr,port))
         self.serv.listen(nb_conn)
         self.connections = []
-        self.newConn = queue.queue(nb_conn)
+        self.newConn = queue.Queue(nb_conn)
         self.stop_sig = False
-    
-    def start(self):
-        self.tSer = threading.Thread(target=serverThread)
-        self.tSer.start()
-        return tSer
-    
-    def close(self):
-        self.stop_sig = True
-        self.tSer.join()
-        for c in self.connections :
-            c.close()
-        self.serv.close()
-        
+
     def serverThread(self):
-        while not self.stop_sig
+        while not self.stop_sig:
             readable, writable, errored = select.select((self.serv,), [], [], STIMEOUT)
             for s in readable :
                 conn, adr = s.accept()
@@ -254,6 +242,19 @@ class Server():
                 self.connections.append(c)
                 self.newConn.put(c)
         exit()
+    
+    def start(self):
+        self.tSer = threading.Thread(target=self.serverThread)
+        self.tSer.start()
+    
+    def close(self):
+        self.stop_sig = True
+        self.tSer.join()
+        for c in self.connections :
+            c.close()
+        self.serv.close()
+        
+
     
     def getConnection(self):
         return self.newConn.get()
