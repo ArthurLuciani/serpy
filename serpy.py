@@ -51,6 +51,7 @@ class Connection:
         self.out_mode = 0
         self.ackEvent = threading.Event()
         self.modeChangeEvent = threading.Event()
+        self.adr = 0
 
     def connect(self, adr, port):
         self.adr = (adr, port)
@@ -79,7 +80,8 @@ class Connection:
         self.connected = False
 
     def _brokenConnection(self):
-        #Warning("Connection to {} broken !".format(self.adr))
+        if self.adr:
+            Warning("Connection to {} broken !".format(self.adr))
         self.connected = False
         self.stop_sig = True
         threading.Thread(target=self._brokenConnHandler).start()
@@ -91,7 +93,7 @@ class Connection:
             self.connect(*self.adr)
             self.start()
         else :
-            print("Closing connection")
+            Warning("Closing connection")
             self.close()
         exit()
             
@@ -102,7 +104,7 @@ class Connection:
             for s in writable:
                 if not self.out_block_q.empty():
                     s.sendall(self.out_block_q.get()+b'\x1F')
-        print("closing : outThread")
+        #print("closing : outThread")
         exit()
                 
     def inThread(self):
@@ -126,7 +128,7 @@ class Connection:
                 for block in blocks:
                     if block :
                         self.block_q.put(block)
-        print("closing : inThread")
+        #print("closing : inThread")
         exit()
         
     def listeningCenterThread(self):
@@ -167,7 +169,7 @@ class Connection:
                     self.in_q.put(b85decode(block))
             else :
                 sleep(STIMEOUT)
-        print("closing : listeningCenterThread")
+        #print("closing : listeningCenterThread")
         exit()
                     
             
@@ -192,7 +194,7 @@ class Connection:
                     self.out_block_q.put(block+b'\x04')
             else :
                 sleep(STIMEOUT)
-        print("closing : speechCenterThread")
+        #print("closing : speechCenterThread")
         exit()
                 
     
