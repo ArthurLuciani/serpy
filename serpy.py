@@ -25,13 +25,12 @@
 import socket
 import threading
 import queue
-import time
 import select
 #from weakref import finalize
 from base64 import b85encode, b85decode
 from time import sleep
 
-STIMEOUT = 0.020
+STIMEOUT = 0.050
 
 class Connection:
     """
@@ -62,6 +61,7 @@ class Connection:
         self.conn.connect(self.adr)
         self.connected = True
         self.start()
+        return self
 
     def start(self):
         self.stop_sig = False
@@ -106,6 +106,8 @@ class Connection:
             for s in writable:
                 if not self.out_block_q.empty():
                     s.sendall(self.out_block_q.get()+b'\x1F')
+                else :
+                    sleep(STIMEOUT)
         #print("closing : outThread")
         exit()
                 
@@ -257,7 +259,7 @@ class Server:
             for s in readable :
                 conn, adr = s.accept()
                 print("Connection to ", adr, " accepted")
-                c = Connection(sock=conn)
+                c = Connection(sock=conn, encoding=self.encoding)
                 c.start()
                 self.connections.append(c)
                 self.newConn.put(c)
@@ -275,8 +277,6 @@ class Server:
             c.close()
         self.serv.close()
         
-
-    
     def getConnection(self):
         return self.newConn.get()
 
