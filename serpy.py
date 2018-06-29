@@ -29,6 +29,7 @@ import time
 import select
 #from weakref import finalize
 from base64 import b85encode, b85decode
+from time import sleep
 
 STIMEOUT = 0.020
 
@@ -40,7 +41,7 @@ class Connection:
         self.conn = sock
         self.encoding = encoding
         self.auto_restart = auto_restart
-        self.connected = conn != None
+        self.connected = sock != None
         self.in_q = queue.Queue(10)
         self.out_q = queue.Queue(10)
         self.block_q = queue.Queue(64)
@@ -99,13 +100,17 @@ class Connection:
         while not self.stop_sig:
             readable, writable, errored = select.select([], (self.conn,), [], STIMEOUT)
             for s in writable:
-                s.sendall(self.out_block_q.get()+b'\x37')
+                s.sendall(self.out_block_q.get()+b'\x1F')
         exit()
                 
     def inThread(self):
         data = bytes()
         while not self.stop_sig:
-            readable, writable, errored = select.select((self.conn,), [], [], STIMEOUT)
+            readable, writable, errored = select.select((self.conn,), [], (self.conn,), STIMEOUT)
+            if errored :
+                self._brokenConnection()
+                continue
+            
             for s in readable:
                 if not self.block_q.full():
                     chunk = self.conn.recv(4096)
@@ -114,8 +119,8 @@ class Connection:
                     else :
                         self._brokenConnection()
 
-            if b'\x37' in data:
-                *blocks, data = data.split(b'\x37')
+            if b'\x1F' in data:
+                *blocks, data = data.split(b'\x1F')
                 for block in blocks:
                     if block :
                         self.block_q.put(block)
@@ -128,34 +133,37 @@ class Connection:
         """
         data = bytes()
         while not self.stop_sig:
-            block = self.block_q.get()
-            if block.startswith(b'\x01'): # indicates internal communication
-                block = block.decode(self.encoding)[1:]
-                if block.startswith("SETMODE") :
-                    self.in_mode = int(block[-1])
-                    self.out_block_q.put(b"\x01ACKMODCG")
-                    continue
+            if not self.block_q.empty():
+                block = self.block_q.get()
+                if block.startswith(b'\x01'): # indicates internal communication
+                    block = block.decode(self.encoding)[1:]
+                    if block.startswith("SETMODE") :
+                        self.in_mode = int(block[-1])
+                        self.out_block_q.put(b"\x01ACKMODCG")
+                        continue
 
-                elif block == "ACKEOT!!":
-                    self.ackEvent.set()
-                    continue
+                    elif block == "ACKEOT!!":
+                        self.ackEvent.set()
+                        continue
+                    
+                    elif block == "ACKMODCG":
+                        self.modeChangeEvent.set()
+                        continue
                 
-                elif block == "ACKMODCG":
-                    self.modeChangeEvent.set()
-                    continue
-            
-            if self.in_mode == 0:
-                in_q.put(block)
-            
-            elif self.in_mode == 1:
-                data += block
-                if b'\x04' in data:
-                    message, data = data.split(b'\x04')
-                    self.out_block_q.put(b"\x01ACKEOT!!")
-                    self.in_q.put(message)
+                if self.in_mode == 0:
+                    self.in_q.put(block)
                 
-            elif self.in_mode == 2: # for b85-encoded bytes
-                in_q.put(b85decode(block))
+                elif self.in_mode == 1:
+                    data += block
+                    if b'\x04' in data:
+                        message, data = data.split(b'\x04')
+                        self.out_block_q.put(b"\x01ACKEOT!!")
+                        self.in_q.put(message)
+                    
+                elif self.in_mode == 2: # for b85-encoded bytes
+                    self.in_q.put(b85decode(block))
+            else :
+                sleep(STIMEOUT)
         exit()
                     
             
@@ -164,19 +172,22 @@ class Connection:
         This thread controls the Output of this connection.
         """
         while not self.stop_sig:
-            block, mode = self.out_q.get()
-            if mode != self.out_mode :
-                self.modeChangeEvent.clear()
-                self.out_block_q.put(b"\x01SETMODE" +
-                                    str(mode).encode(self.encoding))
-                self.modeChangeEvent.wait()
-                self.out_mode = mode
-            
-            if mode == 0 or mode == 2:
-                self.out_block_q.put(block)
-            
-            elif mode == 1:
-                self.out_block_q.put(block+b'\x04')
+            if not self.out_q.empty():
+                block, mode = self.out_q.get()
+                if mode != self.out_mode :
+                    self.modeChangeEvent.clear()
+                    self.out_block_q.put(b"\x01SETMODE" +
+                                        str(mode).encode(self.encoding))
+                    self.modeChangeEvent.wait()
+                    self.out_mode = mode
+                
+                if mode == 0 or mode == 2:
+                    self.out_block_q.put(block)
+                
+                elif mode == 1:
+                    self.out_block_q.put(block+b'\x04')
+            else :
+                sleep(STIMEOUT)
         exit()
                 
     
@@ -236,7 +247,7 @@ class Server:
             readable, writable, errored = select.select((self.serv,), [], [], STIMEOUT)
             for s in readable :
                 conn, adr = s.accept()
-                print("Connection to ", addr, " accepted")
+                print("Connection to ", adr, " accepted")
                 c = Connection(sock=conn)
                 c.start()
                 self.connections.append(c)
