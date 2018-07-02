@@ -26,6 +26,7 @@ import socket
 import threading
 import queue
 import select
+import warnings
 #from weakref import finalize
 from base64 import b85encode, b85decode
 from time import sleep
@@ -34,7 +35,7 @@ STIMEOUT = 0.050
 
 class Connection:
     """
-    pass
+    ss
     """
     def __init__(self, sock=None, encoding='ascii', auto_restart=False):
         self.conn = sock
@@ -53,9 +54,15 @@ class Connection:
         self.adr = 0
 
     def connect(self, adr, port):
+        """
+        Connects this Connection to a remote socket at adr (adress) and
+        port then start the connection by calling self.start().
+        If the Connection was already connected, this method will first
+        close this connection (socket)
+        """
         self.adr = (adr, port)
         if self.connected:
-            Warning("Already connected !! -> Closing connection")
+            #warnings.warn("Already connected !! -> Closing connection")
             self.conn.close()
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.conn.connect(self.adr)
@@ -64,17 +71,19 @@ class Connection:
         return self
 
     def start(self):
+        """Start the connection (start the threads)"""
         self.stop_sig = False
         threadSet = set()
-        threadSet.add(threading.Thread(target=self.inThread))
-        threadSet.add(threading.Thread(target=self.outThread))
-        threadSet.add(threading.Thread(target=self.listeningCenterThread))
-        threadSet.add(threading.Thread(target=self.speechCenterThread))
+        threadSet.add(threading.Thread(target=self._inThread))
+        threadSet.add(threading.Thread(target=self._outThread))
+        threadSet.add(threading.Thread(target=self._listeningCenterThread))
+        threadSet.add(threading.Thread(target=self._speechCenterThread))
         for t in threadSet:
             t.start()
         self.threadSet = threadSet
 
     def close(self):
+        """Stop the threads and closes the connection (socket)"""
         self.stop_sig = True
         for t in self.threadSet:
             t.join()
@@ -82,25 +91,36 @@ class Connection:
         self.connected = False
 
     def _brokenConnection(self):
+        """ 
+        This method will start the _brokenConnHandler thread so that
+        others thread may continue running and stoping.
+        """
         if self.adr:
-            Warning("Connection to {} broken !".format(self.adr))
+            #warnings.warn("Connection to {} broken !".format(self.adr))
         self.connected = False
         self.stop_sig = True
         threading.Thread(target=self._brokenConnHandler).start()
 
     def _brokenConnHandler(self):
+        """
+        Handles broken connections and tries to restart it if auto
+        restart is enabled.
+        """
         if self.auto_restart :
-            print("Attempting connection restart")
+            #warnings.warn("Attempting connection restart")
             self.close()
             self.connect(*self.adr)
-            print("finished")
+            #warnings.warn("finished")
         else :
-            Warning("Closing connection")
+            #warnings.warn("Closing connection")
             self.close()
         exit()
             
         
-    def outThread(self):
+    def _outThread(self):
+        """
+        Get blocks when available and sends them
+        """
         while not self.stop_sig:
             readable, writable, errored = select.select([], (self.conn,), [], STIMEOUT)
             for s in writable:
@@ -108,10 +128,17 @@ class Connection:
                     s.sendall(self.out_block_q.get()+b'\x1F')
                 else :
                     sleep(STIMEOUT)
-        #print("closing : outThread")
         exit()
                 
-    def inThread(self):
+    def _inThread(self):
+        """
+        This thread listens on the connection and retieves any data that
+        is sent on the socket. Then it assemble the data into 
+        intelligible message named block. Those blocks are delimited by
+        the Unit Separator character.
+        Blocks are then put into the block_q to be processed by the 
+        _listeningCenterThread.
+        """
         data = bytes()
         while not self.stop_sig:
             readable, writable, errored = select.select((self.conn,), [], (self.conn,), STIMEOUT)
@@ -132,13 +159,13 @@ class Connection:
                 for block in blocks:
                     if block :
                         self.block_q.put(block)
-        #print("closing : inThread")
         exit()
         
-    def listeningCenterThread(self):
+    def _listeningCenterThread(self):
         """
         This thread controls the Input of this connection. It interprets 
-        the data received (eg: commands)
+        the data received (eg: commands). It partialy implements the 
+        internal communication protocol.
         """
         data = bytes()
         while not self.stop_sig:
@@ -173,13 +200,13 @@ class Connection:
                     self.in_q.put(b85decode(block))
             else :
                 sleep(STIMEOUT)
-        #print("closing : listeningCenterThread")
         exit()
                     
             
-    def speechCenterThread(self):
+    def _speechCenterThread(self):
         """
-        This thread controls the Output of this connection.
+        This thread controls the Output of this connection. It partialy
+        implements the internal communication protocol.
         """
         while not self.stop_sig:
             if not self.out_q.empty():
@@ -198,11 +225,17 @@ class Connection:
                     self.out_block_q.put(block+b'\x04')
             else :
                 sleep(STIMEOUT)
-        #print("closing : speechCenterThread")
         exit()
                 
     
     def getData(self, timeout=None):
+        """
+        Returns the received data in bytes
+        Optional argument : timeout (default None)
+        
+        Will block until there is data or timeout is reached.
+        On timeout will raise queue.Empty exception
+        """
         return self.in_q.get(timeout=timeout)
     
     def sendData(self, data, mode=0, timeout=None):
@@ -227,9 +260,11 @@ class Connection:
         return
 
     def enableRestart(self):
+        """Enable auto restart when the connection is broken"""
         self.auto_restart = True
     
     def disableRestart(self):
+        """Disable auto restart when the connection is broken"""
         self.auto_restart = False
 
 
@@ -237,7 +272,14 @@ class Connection:
 
 class Server:
     """
-    33
+    A server that will accept connections making Connection objects.
+    
+    It creates a socket (socket.AF_INET, socket.SOCK_STREAM) on a given
+    adress and port that will listen and accept connections. Each new
+    socket is passed to a Connection object which is then started.
+    The server remembers all Connection object it has created in a list.
+    The server can accept at most nb_conn (default 5) concurent 
+    connections.
     """
     def __init__(self, adr, port, nb_conn=5, encoding='ascii'):
         self.adr = adr
@@ -253,12 +295,12 @@ class Server:
         self.newConn = queue.Queue(nb_conn)
         self.stop_sig = False
 
-    def serverThread(self):
+    def _serverThread(self):
         while not self.stop_sig:
             readable, writable, errored = select.select((self.serv,), [], [], STIMEOUT)
             for s in readable :
                 conn, adr = s.accept()
-                print("Connection to ", adr, " accepted")
+                #warnings.warn("Connection to ", adr, " accepted")
                 c = Connection(sock=conn, encoding=self.encoding)
                 c.start()
                 self.connections.append(c)
@@ -266,11 +308,18 @@ class Server:
         exit()
     
     def start(self):
-        self.tSer = threading.Thread(target=self.serverThread)
+        """
+        Start the server thread. Returns self (ie: the Server object)
+        """
+        self.tSer = threading.Thread(target=self._serverThread)
         self.tSer.start()
         return self
     
     def close(self):
+        """
+        Closes the server only. Its connections remain functionning.
+        One can still get the connection list afterward.
+        """
         self.stop_sig = True
         self.tSer.join()
         for c in self.connections :
@@ -278,12 +327,23 @@ class Server:
         self.serv.close()
         
     def getConnection(self):
+        """
+        Gets a Connection object from new connections queue. This method
+        will block if there is no new connection.
+        """
         return self.newConn.get()
 
     def getConnectionsList(self):
+        """
+        Returns the list of all the Connection objects created by the 
+        server.
+        """
         return self.connections[:]
         
     def closeServer(self):
+        """
+        Closes the server and all of its connections
+        """
         for c in self.connections:
             c.close()
         self.close()
