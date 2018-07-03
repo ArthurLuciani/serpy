@@ -36,7 +36,7 @@ def recvThread(c):
     while not stop_flag:
         try: 
             lock.acquire()
-            print(">>> "c.getData(1).decode(encoding))
+            print(">>> "+c.getData(1).decode(encoding))
             lock.release()
         except sp.queue.Empty:
             pass
