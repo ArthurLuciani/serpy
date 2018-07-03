@@ -26,7 +26,7 @@ import threading
 
 ENCODING = 'utf-8'
 ADR = 'localhost'
-PORT = 19876
+PORT = 8000
 NAME = "VOID"
 
 lock = threading.Lock()
@@ -37,14 +37,15 @@ def recvThread(c):
     while not stop_flag:
         try: 
             lock.acquire()
-            print(">>> "+c.getData(1).decode(encoding))
+            print(">>> "+c.getData(1).decode(ENCODING))
             lock.release()
         except sp.queue.Empty:
-            pass
+            lock.release()
 
 def main(args):
     global stop_flag, NAME
     c = sp.Connection(encoding=ENCODING, auto_restart=True).connect(ADR, PORT)
+    print("-------------- Connected --------------")
     th = threading.Thread(target=recvThread, args=(c,))
     th.start()
     while not stop_flag:

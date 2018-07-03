@@ -34,7 +34,7 @@ import serpy as sp
 from time import sleep
 
 ADR = ''
-PORT = 19876
+PORT = 8000
 NB_CONN = 100
 ENCODING = 'utf-8' #probably useless
 
@@ -52,7 +52,7 @@ def main(args):
                 stop_flag = True
                 break
             for c in conn_list:
-                if c is not rc:
+                if c != rc:
                     c.sendData(data)
         if not read_conn_list: sleep(0.01) # allow this thread to rest
     s.closeServer()
