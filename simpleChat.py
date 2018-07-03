@@ -33,6 +33,7 @@ lock = threading.Lock()
 stop_flag = False
 
 def recvThread(c):
+    global stop_flag
     while not stop_flag:
         try: 
             lock.acquire()
@@ -42,6 +43,7 @@ def recvThread(c):
             pass
 
 def main(args):
+    global stop_flag, NAME
     c = sp.Connection(encoding=ENCODING, auto_restart=True).connect(ADR, PORT)
     th = threading.Thread(target=recvThread, args=(c,))
     th.start()
