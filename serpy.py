@@ -354,6 +354,9 @@ class Server:
                 c.start()
                 self.connections.append(c)
                 self.newConn.put(c)
+            for c in self.connections: #clear disconected connections
+                if not c.connected:
+                    self.connections.remove(c)
         exit()
     
     def start(self):
