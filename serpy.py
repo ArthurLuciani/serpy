@@ -35,7 +35,19 @@ STIMEOUT = 0.050
 
 class Connection:
     """
-    ss
+    Handles the connection over a TCP/IP socket and grants some tools.
+    
+    This object can either 'inherit' an existing connected socket or 
+    create its own via the connect method.
+    
+    ------
+    Usage:
+     - To create a Connection with socket inheritance :
+        >>> c = Connection(sock=socket, encoding=encoding)
+        >>> c.start()
+    
+     - To create a Connection and connect it:
+        >>> c = Connection(encoding, auto_restart).connect(adr, port)
     """
     def __init__(self, sock=None, encoding='ascii', auto_restart=False):
         self.conn = sock
@@ -44,8 +56,8 @@ class Connection:
         self.connected = sock != None
         self.in_q = queue.Queue(10)
         self.out_q = queue.Queue(10)
-        self.block_q = queue.Queue(64)
-        self.out_block_q = queue.Queue(64)
+        self.block_q = queue.Queue(10)
+        self.out_block_q = queue.Queue(10)
         self.stop_sig = False
         self.in_mode = 0
         self.out_mode = 0
@@ -59,6 +71,8 @@ class Connection:
         port then start the connection by calling self.start().
         If the Connection was already connected, this method will first
         close this connection (socket)
+        
+
         """
         self.adr = (adr, port)
         if self.connected:
@@ -95,7 +109,7 @@ class Connection:
         This method will start the _brokenConnHandler thread so that
         others thread may continue running and stoping.
         """
-        if self.adr:
+        if self.adr: pass
             #warnings.warn("Connection to {} broken !".format(self.adr))
         self.connected = False
         self.stop_sig = True
@@ -239,14 +253,34 @@ class Connection:
         return self.in_q.get(timeout=timeout)
     
     def sendData(self, data, mode=0, timeout=None):
+        """
+        Send the data over this connection following a mode.
+        
+        Optional timeout (in seconds [float]) may be specified. 
+        May block for a maximum of 2*timeout.
+        May raise raise queue.Full exception or return False on timeout
+        ------
+        mode 0 : send data, non-blocking
+        mode 1 : send data, will block until acknoledgment or timeout
+        mode 2 : similar to mode 0 but the data is encoded in base 85
+        
+        The mode will automatically switch to 2 if the datatype is bytes
+        (to ensure control characters are not met)
+        ------
+        This method will convert some data types:
+         - float OR int --> str
+         - str --> bytes (following self.encoding)
+        """
         if type(data) == float or type(data) == int:
             data = str(data)
         elif type(data) == bytes:
-            data = b85encode(data)
             mode = 2
         
         if type(data) == str:
             data = data.encode(self.encoding)
+        
+        if mode == 2:
+            data = b85encode(data)
         
         if mode == 0 or mode == 2:
             self.out_q.put((data, mode), timeout=timeout)
@@ -266,6 +300,17 @@ class Connection:
     def disableRestart(self):
         """Disable auto restart when the connection is broken"""
         self.auto_restart = False
+    
+    def isConnected(self):
+        """Returns True if connected."""
+        return self.connected
+    
+    def isDataAvailable(self):
+        """
+        Return True if there is new data available 
+        (ie: in the input queue)
+        """
+        return not self.in_q.empty()
 
 
 
@@ -280,6 +325,10 @@ class Server:
     The server remembers all Connection object it has created in a list.
     The server can accept at most nb_conn (default 5) concurent 
     connections.
+    
+    Usage :
+     - To create a server:
+        >>> s = Server(adr, port, nb_conn, encoding).start()
     """
     def __init__(self, adr, port, nb_conn=5, encoding='ascii'):
         self.adr = adr
@@ -347,6 +396,13 @@ class Server:
         for c in self.connections:
             c.close()
         self.close()
+        
+    def readableConnections(self):
+        """
+        Returns the list of the child Connection objects which have data
+        available to be read.
+        """
+        return [c for c in self.connections if c.isDataAvailable()]
 
 def main(args):
     return 0
