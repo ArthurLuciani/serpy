@@ -12,21 +12,26 @@ s = Server(adr, port, nb_conn, encoding).start()
 ```
 ### Retrieving the child Connection objects from the Server
 When a socket connets itself with the server, the sever creates a connection object with the new socket it has created. To retrieve those Connection objects there are several methods
- - getConnection() :
+ - `Server.getConnection()` :
  Returns a new Connection object from the new connection queue. This method will block if there is no new connection in queue
  ```Python3
 conn_list = s.getConnection()
 ```
- - getConnectionsList() :
+ - `Server.getConnectionsList()` :
  Returns a copy of the list of all active child Connections
  ```Python3
 conn_list = s.getConnectionsList()
 ```
- - readableConnections() : 
+ - `Server.readableConnections()` : 
  Returns the list of child Connection objects which have data available to be read
   ```Python3
 conn_list = s.readableConnections()
 ```
+
+### Closing the server
+ - `Server.close()` method : Will close the server. Won't close any child Connection. Won't accept any new connection. Cannot be restarted. Won't cleanup broken connections out of the Connection list
+
+ - `Server.closeServer()` method : Will close all the child Connection objects and then close itself.
 
 ### Making a connection to a server
 
@@ -37,6 +42,8 @@ If one wants the Connection object to try reconnecting itself to the server if t
 ```Python3
 c = Connection(auto_restart=True).connect(adr, port)
 ```
+or use the `Connection.enableRestart()` method
+
 One can also specify the encoding it should use if string objects are passed to send data (default ascii)
 ```Python3
 c = Connection(encoding='utf-8').connect(adr, port)
@@ -60,3 +67,8 @@ An optional timeout may be specified. The method may block for up to 2\*timeout.
 ```Python3
 c.sendData(data, mode=0, timeout=None)
 ```
+
+### Closing a connection
+Use the `Connection.close()` method
+
+
