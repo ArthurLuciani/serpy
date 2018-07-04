@@ -10,6 +10,17 @@
 ```Python3
 s = Server(adr, port, nb_conn, encoding).start()
 ```
+### Retrieving the child Connection objects from the Server
+When a socket connets itself with the server, the sever creates a connection object with the new socket it has created. To retrieve those Connection objects there are several methods
+ - getConnection() :
+ Returns a new Connection object from the new connection queue. This method will block if there is no new connection in queue
+ ```Python3
+c = s.getConnection()
+```
+ - getConnectionsList()
+ Returns the list of all active child Connections
+
+
 ### Making a connection to a server
 
 ```Python3
