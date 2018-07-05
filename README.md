@@ -1,5 +1,5 @@
 # serpy
-
+Serpy is ment to provide an easy to use library for TCP/IP communication. It provides two classes and methods for synchronous and asynchronous (ordered) communication. No more worries about sockets, threads, queues and sudden disconnections.
 
 ## Installation
  - Make sure to have python 3. Serpy only uses the standard library.
