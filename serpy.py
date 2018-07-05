@@ -122,8 +122,14 @@ class Connection:
         """
         if self.auto_restart :
             #warnings.warn("Attempting connection restart")
-            self.close()
-            self.connect(*self.adr)
+            for i in range(1000):
+                try:
+                    self.close()
+                    self.connect(*self.adr)
+                except:
+                    sleep(0.5)
+                else:
+                    break
             #warnings.warn("finished")
         else :
             #warnings.warn("Closing connection")

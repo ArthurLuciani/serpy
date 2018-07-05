@@ -56,7 +56,7 @@ def main(args):
                     stop_flag = True
                     break
                 elif s.lower().startswith("/name"):
-                    NAME = s.split(' ')[1]
+                    NAME = s.split(' ')[1:].join(' ')
                 elif s == "/KTHXBYE":
                     c.sendData(s)
                 else :
