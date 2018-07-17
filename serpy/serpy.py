@@ -64,6 +64,17 @@ class Connection:
         self.ackEvent = threading.Event()
         self.modeChangeEvent = threading.Event()
         self.adr = 0
+    
+    def __iter__(self):
+        """
+        Iterates over all available data. When data is read it cannot be
+        read again (reading removes from storage)
+        """
+        try:
+            while True:
+                yield self.in_q.get(timeout=0.01)
+        except queue.Empty:
+            pass
 
     def connect(self, adr, port):
         """
@@ -365,6 +376,19 @@ class Server:
                     self.connections.remove(c)
         exit()
     
+    def __iter__(self):
+        """
+        Yield active connections (generator).
+        """
+        yield from self.connections
+        
+    def __len__(sefl)
+        """
+        The lenght of Server is the number of active connections which
+        are iterable over.
+        """
+        return len(self.connections)
+
     def start(self):
         """
         Start the server thread. Returns self (ie: the Server object)
