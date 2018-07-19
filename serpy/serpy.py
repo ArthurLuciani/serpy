@@ -110,6 +110,8 @@ class Connection:
     def close(self):
         """Stop the threads and closes the connection (socket)"""
         self.stop_sig = True
+        self.ackEvent.set() #setting events to free the threads
+        self.modeChangeEvent.set()
         for t in self.threadSet:
             t.join()
         self.conn.close()
@@ -179,11 +181,15 @@ class Connection:
             
             for s in readable:
                 if not self.block_q.full():
-                    chunk = self.conn.recv(4096)
-                    if chunk:
-                        data += chunk
-                    else :
+                    try:
+                        chunk = self.conn.recv(4096)
+                    except ConnectionResetError:
                         self._brokenConnection()
+                    else:
+                        if chunk:
+                            data += chunk
+                        else :
+                            self._brokenConnection()
 
             if b'\x1F' in data:
                 *blocks, data = data.split(b'\x1F')
