@@ -382,7 +382,7 @@ class Server:
         """
         yield from self.connections
         
-    def __len__(sefl)
+    def __len__(self):
         """
         The lenght of Server is the number of active connections which
         are iterable over.
