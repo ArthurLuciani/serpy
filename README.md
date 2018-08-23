@@ -3,7 +3,7 @@ Serpy is ment to provide an easy to use library for TCP/IP communication. It pro
 
 ## Installation
  - Make sure to have python 3. Serpy only uses the standard library.
- - Simply download serpy.py and put it in the same folder of the python script from which you want to import serpy.
+ - Simply download the serpy folder and put it in the same folder of the python script from which you want to import serpy.
  
 ## Usage
 ### Using Server
