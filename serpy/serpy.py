@@ -26,7 +26,7 @@ import socket
 import threading
 import queue
 import select
-import warnings
+#import warnings
 #from weakref import finalize
 from base64 import b85encode, b85decode
 from time import sleep
@@ -78,7 +78,7 @@ class Connection:
 
     def connect(self, adr, port):
         """
-        Connects this Connection to a remote socket at adr (adress) and
+        Connects this Connection to a remote socket at adr (address) and
         port then start the connection by calling self.start().
         If the Connection was already connected, this method will first
         close this connection (socket)
@@ -235,6 +235,13 @@ class Connection:
                     
                 elif self.in_mode == 2: # for b85-encoded bytes
                     self.in_q.put(b85decode(block))
+                
+                elif self.in_mode == 3:
+                    data += block
+                    if b'\x04' in data:
+                        message, data = data.split(b'\x04')
+                        self.out_block_q.put(b"\x01ACKEOT!!")
+                        self.in_q.put(b85decode(message))
             else :
                 sleep(STIMEOUT)
         exit()
@@ -258,7 +265,7 @@ class Connection:
                 if mode == 0 or mode == 2:
                     self.out_block_q.put(block)
                 
-                elif mode == 1:
+                elif mode == 1 or mode == 3:
                     self.out_block_q.put(block+b'\x04')
             else :
                 sleep(STIMEOUT)
@@ -286,9 +293,10 @@ class Connection:
         mode 0 : send data, non-blocking
         mode 1 : send data, will block until acknoledgment or timeout
         mode 2 : similar to mode 0 but the data is encoded in base 85
+        mode 3 : similar to mode 1 but the data is encoded in base 85
         
-        The mode will automatically switch to 2 if the datatype is bytes
-        (to ensure control characters are not met)
+        The mode will automatically switch to 2 or 3 if the datatype is 
+        bytes (to ensure control characters are not encountered)
         ------
         This method will convert some data types:
          - float OR int --> str
@@ -297,19 +305,22 @@ class Connection:
         if type(data) == float or type(data) == int:
             data = str(data)
         elif type(data) == bytes:
-            mode = 2
+            if mode == 0 :
+                mode = 2
+            elif mode == 1:
+                mode = 3
         
         if type(data) == str:
             data = data.encode(self.encoding)
         
-        if mode == 2:
+        if mode == 2 or mode == 3:
             data = b85encode(data)
         
         if mode == 0 or mode == 2:
             self.out_q.put((data, mode), timeout=timeout)
             return
         
-        elif mode == 1:
+        elif mode == 1 or mode == 3:
             self.ackEvent.clear()
             self.out_q.put((data, mode), timeout=timeout)
             return self.ackEvent.wait(timeout=timeout) #returns True if no timeout, else False
@@ -343,7 +354,7 @@ class Server:
     A server that will accept connections making Connection objects.
     
     It creates a socket (socket.AF_INET, socket.SOCK_STREAM) on a given
-    adress and port that will listen and accept connections. Each new
+    address and port that will listen and accept connections. Each new
     socket is passed to a Connection object which is then started.
     The server remembers all Connection object it has created in a list.
     The server can accept at most nb_conn (default 5) concurent 
