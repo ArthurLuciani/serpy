@@ -34,15 +34,17 @@ NAME = "VOID"
 lock = threading.Lock()
 stop_flag = False
 
+
 def recvThread(c):
     global stop_flag
     while not stop_flag:
-        try: 
+        try:
             lock.acquire()
             print(">>> "+c.getData(1).decode(ENCODING))
             lock.release()
         except sp.queue.Empty:
             lock.release()
+
 
 def main(args):
     global stop_flag, NAME
@@ -70,6 +72,7 @@ def main(args):
     th.join()
     c.close()
     return 0
+
 
 if __name__ == '__main__':
     import sys

@@ -26,10 +26,11 @@ import socket
 import threading
 import queue
 import select
-#import warnings
 #from weakref import finalize
 from base64 import b85encode, b85decode
 from time import sleep
+import pickle
+import warnings
 
 STIMEOUT = 0.050
 
@@ -49,10 +50,11 @@ class Connection:
      - To create a Connection and connect it:
         >>> c = Connection(encoding, auto_restart).connect(adr, port)
     """
-    def __init__(self, sock=None, encoding='ascii', auto_restart=False):
+    def __init__(self, sock=None, encoding='ascii', auto_restart=False, allow_unpickle=True):
         self.conn = sock
         self.encoding = encoding
         self.auto_restart = auto_restart
+        self.allow_unpickle = allow_unpickle
         self.connected = sock != None
         self.in_q = queue.Queue(10)
         self.out_q = queue.Queue(10)
@@ -87,7 +89,7 @@ class Connection:
         """
         self.adr = (adr, port)
         if self.connected:
-            #warnings.warn("Already connected !! -> Closing connection")
+            # warnings.warn("Already connected !! -> Closing connection")
             self.conn.close()
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.conn.connect(self.adr)
@@ -242,7 +244,23 @@ class Connection:
                         message, data = data.split(b'\x04')
                         self.out_block_q.put(b"\x01ACKEOT!!")
                         self.in_q.put(b85decode(message))
-            else :
+
+                elif self.in_mode == 4:
+                    if self.allow_unpickle:
+                        self.in_q.put(pickle.loads(b85decode(block)))
+                    else:
+                        self.in_q.put(b85decode(block))
+
+                elif self.in_mode == 5:
+                    data += block
+                    if b'\x04' in data:
+                        message, data = data.split(b'\x04')
+                        self.out_block_q.put(b"\x01ACKEOT!!")
+                        if self.allow_unpickle:
+                            self.in_q.put(pickle.loads(b85decode(message)))
+                        else:
+                            self.in_q.put(b85decode(message))
+            else:
                 sleep(STIMEOUT)
         exit()
                     
@@ -261,13 +279,13 @@ class Connection:
                                         str(mode).encode(self.encoding))
                     self.modeChangeEvent.wait()
                     self.out_mode = mode
-                
-                if mode == 0 or mode == 2:
+                # non-blocking
+                if mode == 0 or mode == 2 or mode == 4:
                     self.out_block_q.put(block)
-                
-                elif mode == 1 or mode == 3:
+                # blocking
+                elif mode == 1 or mode == 3 or mode == 5:
                     self.out_block_q.put(block+b'\x04')
-            else :
+            else:
                 sleep(STIMEOUT)
         exit()
                 
@@ -282,7 +300,7 @@ class Connection:
         """
         return self.in_q.get(timeout=timeout)
     
-    def sendData(self, data, mode=0, timeout=None):
+    def sendData(self, data, mode=0, timeout=None,*, force_mode=False):
         """
         Send the data over this connection following a mode.
         
@@ -291,36 +309,61 @@ class Connection:
         May raise raise queue.Full exception or return False on timeout
         ------
         mode 0 : send data, non-blocking
-        mode 1 : send data, will block until acknoledgment or timeout
+        mode 1 : send data, will block until acknowledgment or timeout
         mode 2 : similar to mode 0 but the data is encoded in base 85
         mode 3 : similar to mode 1 but the data is encoded in base 85
+        mode 4 : pickle the data and send, non-blocking
+        mode 5 : pickle the data and send, blocking
         
         The mode will automatically switch to 2 or 3 if the datatype is 
         bytes (to ensure control characters are not encountered)
+
+        force_mode (discouraged) will force the mode but data will still
+        be converted to appropriate types (usefull to send pickled data [bytes]
+        to be unpickeld on the receiving end).
         ------
         This method will convert some data types:
          - float OR int --> str
          - str --> bytes (following self.encoding)
         """
+        mode_l = mode
+        # --- selecting appropriate mode and type conversions ---
         if type(data) == float or type(data) == int:
             data = str(data)
         elif type(data) == bytes:
-            if mode == 0 :
+            if mode == 0 or mode == 4:
                 mode = 2
-            elif mode == 1:
+                warnings.warn(f"Wrong mode used, using mode {mode} instead")
+            elif mode == 1 or mode == 5:
                 mode = 3
+                warnings.warn(f"Wrong mode used, using mode {mode} instead")
+        elif type(data) != str:
+            if mode == 0 or mode == 2:
+                mode = 4
+                warnings.warn(f"Wrong mode used, using mode {mode} instead")
+            elif mode == 1 or mode == 3:
+                mode = 5
+                warnings.warn(f"Wrong mode used, using mode {mode} instead")
         
         if type(data) == str:
             data = data.encode(self.encoding)
-        
-        if mode == 2 or mode == 3:
+
+        if mode == 4 or mode == 5:
+            data = pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL)
+
+        if mode == 2 or mode == 3 or mode == 4 or mode == 5:
             data = b85encode(data)
-        
-        if mode == 0 or mode == 2:
+
+        if force_mode :
+            warnings.warn(f"Discouraged. Forcing mode {mode_l} instead of {mode}")
+            mode = mode_l # falling back to the forced mode
+
+        # --- putting data in queue ---
+        if mode == 0 or mode == 2 or mode == 4:
             self.out_q.put((data, mode), timeout=timeout)
             return
         
-        elif mode == 1 or mode == 3:
+        elif mode == 1 or mode == 3 or mode == 5:
             self.ackEvent.clear()
             self.out_q.put((data, mode), timeout=timeout)
             return self.ackEvent.wait(timeout=timeout) #returns True if no timeout, else False
@@ -364,11 +407,12 @@ class Server:
      - To create a server:
         >>> s = Server(adr, port, nb_conn, encoding).start()
     """
-    def __init__(self, adr, port, nb_conn=5, encoding='ascii'):
+    def __init__(self, adr, port, nb_conn=5, encoding='ascii', allow_unpickle=True):
         self.adr = adr
         self.port = port
         self.nb_conn = nb_conn
         self.encoding = encoding
+        self.allow_unpickle = allow_unpickle
         self.lock = threading.Lock()
         self.serv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.serv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -384,7 +428,7 @@ class Server:
             for s in readable :
                 conn, adr = s.accept()
                 #warnings.warn("Connection to ", adr, " accepted")
-                c = Connection(sock=conn, encoding=self.encoding)
+                c = Connection(sock=conn, encoding=self.encoding, allow_unpickle=self.allow_unpickle)
                 c.start()
                 self.connections.append(c)
                 self.newConn.put(c)

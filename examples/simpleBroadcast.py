@@ -30,6 +30,8 @@ To stop the server send b'/KTHXBYE'
 
 
 import sys
+import warnings
+
 sys.path.insert(0, '..')
 import serpy as sp
 from time import sleep
@@ -40,21 +42,23 @@ NB_CONN = 100
 ENCODING = 'utf-8' #probably useless
 
 def main(args):
-    s = sp.Server(ADR, PORT, NB_CONN, ENCODING).start()
+    s = sp.Server(ADR, PORT, NB_CONN, ENCODING, allow_unpickle=False).start()
     print("Server started")
     stop_flag = False
     while not stop_flag:
         read_conn_list = s.readableConnections()
         conn_list = s.getConnectionsList()
         for rc in read_conn_list:
-            data =  rc.getData()
+            data = rc.getData()
+            mode = rc.in_mode
             print(data)
             if data == b'/KTHXBYE':
                 stop_flag = True
                 break
             for c in conn_list:
                 if c != rc:
-                    c.sendData(data)
+                    with warnings.catch_warnings():
+                        c.sendData(data, mode=mode, force_mode=True)
         if not read_conn_list: sleep(0.01) # allow this thread to rest
     s.closeServer()
     print("Server closed")
