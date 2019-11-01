@@ -11,7 +11,7 @@ Serpy is intended to provide an easy-to-use Python module for TCP/IP communicati
 s = Server(adr, port, nb_conn, encoding).start()
 ```
 ### Retrieving the child Connection objects from the Server
-When a socket connets itself with the server, the sever creates a connection object with the new socket it has created. To retrieve those Connection objects there are several methods
+When a socket connects itself with the server, the sever creates a connection object with the new socket it has created. To retrieve those Connection objects there are several methods
  - `Server.getConnection()` :
  Returns a new Connection object from the new connection queue. This method will block if there is no new connection in queue
  ```Python3
@@ -60,7 +60,7 @@ On timeout will raise the queue.Empty exception
 ### Sending data
 To send data use the Connection.sendData method. Several modes are available:
  - mode 0 (default) : the data will just be sent as is without blocking (except if the internal queue is full)
- - mode 1 : the data will be sent and the method will block until acknoledgment
+ - mode 1 : the data will be sent and the method will block until acknowledgment
  - mode 2 : similar to mode 0 but encodes data in base 85. Used to prevent encountering control characters. If data is of type *bytes* then the mode will automticaly change to 2.
  
 An optional timeout may be specified. The method may block for up to 2\*timeout. On timeout may raise queue.Full exception or return False in mode 1.
