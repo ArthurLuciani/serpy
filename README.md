@@ -11,7 +11,7 @@ Serpy is intended to provide an easy-to-use Python module for TCP/IP communicati
 s = Server(adr, port, nb_conn, encoding).start()
 ```
 ### Retrieving the child Connection objects from the Server
-When a socket connects itself with the server, the sever creates a connection object with the new socket it has created. To retrieve those Connection objects there are several methods
+When a socket connects itself with the server, the server creates a connection object with the new socket it has created. To retrieve those Connection objects there are several methods
  - `Server.getConnection()` :
  Returns a new Connection object from the new connection queue. This method will block if there is no new connection in queue
  ```Python3
