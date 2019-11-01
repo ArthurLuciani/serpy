@@ -1,8 +1,8 @@
 # serpy
-Serpy is ment to provide an easy to use library for TCP/IP communication. It provides two classes and methods for synchronous and asynchronous (ordered) communication. No more worries about sockets, threads, queues and sudden disconnections.
+Serpy is intended to provide an easy-to-use Python module for TCP/IP communications. It provides two classes and methods for synchronous and asynchronous (ordered) communication. No more worries about sockets, threads, queues and sudden disconnections. These are handled silently by Serpy.
 
 ## Installation
- - Make sure to have Python 3. Serpy only uses the standard library.
+ - Make sure to have Python 3. Serpy only uses the Python standard library.
  - Simply download the serpy folder and put it in the same folder of the python script from which you want to import serpy.
  
 ## Usage
