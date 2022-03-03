@@ -1,7 +1,7 @@
 # serpy
 Serpy is intended to provide an easy-to-use Python module for direct, low-overhead TCP/IP communications. It provides two classes and methods for synchronous and asynchronous (ordered) communication. No more worries about sockets, threads, queues and sudden disconnections. These are handled silently by Serpy.
 
-Our interest in developing serpy is to use it for transfer of data between scientific instrumentation and data processing workstations. It has successfully been used to interface home-built photon counting electronics to a distance data acquisition workstation.
+Our interest in developing serpy is to use it for transfer of data between scientific instrumentation and data processing workstations. It has successfully been used to interface home-built photon counting electronics to a distant data acquisition workstation.
 
 ## Two versions: serpy and serpy2
 The `serpy2` module has been created on basis of the original `serpy`, conserving its philosophy, but implementing a different protocol that is not compatible with orginal `serpy`. The new protocol aims to be more efficient in terms of bandwidth and processing power. 
