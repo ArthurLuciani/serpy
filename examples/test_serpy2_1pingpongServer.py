@@ -22,7 +22,7 @@ from time import sleep
 
 ADR = ''
 PORT = 8000
-NB_CONN = 3 # if number of connections too low, crashes the Server
+NB_CONN = 3
 
 
 s = sp.Server(ADR, PORT, NB_CONN).start()
