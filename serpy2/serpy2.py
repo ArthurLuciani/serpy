@@ -107,7 +107,7 @@ class Connection:
         """
         self.adr = (adr, port)
         if self.connected:
-            # warnings.warn("Already connected !! -> Closing connection")
+            warnings.warn("Already connected !! -> Closing connection")
             self.conn.close()
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.conn.connect(self.adr)
@@ -131,7 +131,7 @@ class Connection:
         """Stop the threads and closes the connection (socket)
         
         #TODO: check if this requires the Connection to do further cleaning up:
-        stop threads, etc.
+        stop threads etc.
         """
         self.stop_sig = True
         self.ackEvent.set() #setting events to free the threads
@@ -158,7 +158,7 @@ class Connection:
         restart is enabled.
         """
         if self.auto_restart :
-            #warnings.warn("Attempting connection restart")
+            warnings.warn("Attempting connection restart")
             for i in range(1000):
                 try:
                     self.close()
@@ -171,7 +171,7 @@ class Connection:
         else :
             #warnings.warn("Closing connection")
             self.close()
-        #exit() #TODO remove on clean-up
+
         
     def _outThread(self):
         """
@@ -186,7 +186,6 @@ class Connection:
                     s.sendall(self.out_block_q.get())
                 else :
                     sleep(STIMEOUT)
-        #exit() #TODO remove on clean-up
                 
     def _inThread(self):
         """
@@ -202,6 +201,10 @@ class Connection:
         instate = 1 
         while not self.stop_sig:
             readable, writable, errored = select.select((self.conn,), [], (self.conn,), STIMEOUT)
+
+            assert len(readable) < 2,\
+                "Unexpectedly have several connections to read from. I don't understand! It will lead to problems reconstructing data blocks using present code."
+
             if errored :
                 self._brokenConnection()
                 continue
@@ -224,10 +227,7 @@ class Connection:
                 # waiting for a fresh block
                 # received data is expected to start with
                 # BLOCKIDCODE
-                if data.startswith(BLOCKIDCODE):
-                    # be happy: 
-                    # print('incoming block detected...')
-            
+                if (len(data)>=HEADLEN) and data.startswith(BLOCKIDCODE):
                     # decode header                    
                     bheader = data[0:HEADLEN]
                     btype = bheader[5:6] #this gives a bytes object
@@ -235,9 +235,9 @@ class Connection:
                                               'little', signed=False)
                     datalenb = int.from_bytes(bheader[10:14],
                                               'little', signed=False)
-                    # start filling up data                    
-                    bdata = data[HEADLEN:]
-                    data = bytes() # empty data input buffer
+                    # prepare for state 2: receive block
+                    bdata = bytes()
+                    data = data[HEADLEN:]
                     instate = 2 # switch state
                 else:
                     if (len(data) >= HEADLEN):
@@ -249,13 +249,22 @@ class Connection:
                         # we might need to do some kind of reset on the connection.
                         print('WARNING: Resetting chunk input buffer on Connection._inThread in serpy2.')
                         data = bytes() 
-            elif instate == 2:
+            
+            # state machine can switch from state 1 to state 2 within same
+            # cycle
+            # since we have only two states, we can do this
+            if instate == 2:
                 # In the process of receiving a block...
                 bdata_remaining = datalenb - len(bdata)
                 if (len(data) > bdata_remaining):
                     # more incoming data than needed, split data
                     # just take what is needed
                     bdata += data[0:bdata_remaining] 
+                    if len(bdata)!=datalenb:
+                        print('len bdata = ',len(bdata))
+                        print('bdata_remaining = ',bdata_remaining)
+                        print('len data =',len(data))
+                        print('datalenb =',datalenb)
                     assert len(bdata)==datalenb, 'Programmer Error. Incorrect length calculations.'
                     # and put the rest in updated databuffer
                     data = data[bdata_remaining:]
@@ -284,9 +293,7 @@ class Connection:
                         #TODO
                         print('WARNING: Checksum wrong on incoming data.')
                     instate = 1
-            else:
-                assert 1==0, 'Big programmer error in _inThread. Call the programmer.'
-        #exit() #TODO remove on clean-up
+
         
     def _listeningCenterThread(self):
         """
@@ -318,7 +325,6 @@ class Connection:
                 
                 self.in_q.put(data)
             sleep(STIMEOUT)
-        #exit() #TODO remove on clean-up
                     
             
     def _speechCenterThread(self):
@@ -360,7 +366,6 @@ class Connection:
                 self.out_block_q.put(block)
             else:
                 sleep(STIMEOUT)
-        #exit() #TODO remove on clean-up
                 
     
     def getData(self, timeout=None):
@@ -466,7 +471,6 @@ class Server:
         self.serv.bind((adr,port))
         self.serv.listen(nb_conn)
         self.connections = []
-        self.newConn = queue.Queue(nb_conn)
         self.stop_sig = False
 
     def _serverThread(self):
@@ -474,16 +478,17 @@ class Server:
             readable, writable, errored = select.select((self.serv,),
                                                         [], [], STIMEOUT)
             for s in readable :
+                #TODO: handle the following as a proper Exception
+                assert len(self.connections) <= self.nb_conn,\
+                    "too many connections on this Server!"
                 conn, adr = s.accept()
                 #warnings.warn("Connection to ", adr, " accepted")
                 c = Connection(sock=conn)
                 c.start()
                 self.connections.append(c)
-                self.newConn.put(c)
             for c in self.connections: #clear disconected connections
                 if not c.connected:
                     self.connections.remove(c)
-        #exit() #TODO remove on clean-up
     
     def __iter__(self):
         """
@@ -516,13 +521,6 @@ class Server:
         for c in self.connections :
             c.close()
         self.serv.close()
-        
-    def getConnection(self):
-        """
-        Gets a Connection object from new connections queue. This method
-        will block if there is no new connection.
-        """
-        return self.newConn.get()
 
     def getConnectionsList(self):
         """
