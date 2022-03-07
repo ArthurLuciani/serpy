@@ -1,28 +1,32 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-#   test_serpy2_1pingpongServer.py
+#   test_serpy2_1_pingpongServer.py
 #
 
 
 """
 This test server receives data from clients, decodes them, recodes them and
-sends them back to the sender.
+sends them back to the sender ('ping-pong server')
 
 To stop the server send '/KTHXBYE' as a string
 """
 
+#TODO
+# make this a real (pytest compatible?) test
+
 import sys
 sys.path.insert(0, '..')
-
-#import warnings
 
 import serpy2 as sp
 from time import sleep
 
+
+
 ADR = ''
 PORT = 8000
 NB_CONN = 3
+
 
 
 s = sp.Server(ADR, PORT, NB_CONN).start()
@@ -33,7 +37,7 @@ while not stop_flag:
     # conn_list = s.getConnectionsList()
     for rc in read_conn_list:
         data = rc.getData()
-        print('type: ',type(data),end=' ')
+        print(type(data), end=' : ')
         if type(data) is not bytes:
             print('data = ',data)
         else:
@@ -44,7 +48,7 @@ while not stop_flag:
         rc.sendData(data)
     if len(read_conn_list)==0:
         sleep(0.01) # allow this thread to rest
-print('closing server...')
+print('Closing server...')
 s.closeServer()
 print("Server closed")
 
