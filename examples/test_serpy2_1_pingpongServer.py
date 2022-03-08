@@ -12,8 +12,6 @@ sends them back to the sender ('ping-pong server')
 To stop the server send '/KTHXBYE' as a string
 """
 
-#TODO
-# make this a real (pytest compatible?) test
 
 import sys
 sys.path.insert(0, '..')
@@ -51,5 +49,3 @@ while not stop_flag:
 print('Closing server...')
 s.closeServer()
 print("Server closed")
-
-

@@ -32,12 +32,15 @@
 #  Use at your own risk for the good of mankind.
 #   
 #TODO
-#   - write an automated test for all data types (ping-pong server + 1 client)
-#   - write a high data rate test for measuring performance (server + 1 client)
 #   - further check robustness of code against transmission errors /
 #     disconnection/reconnection incidents
 #   - stress test (server + several clients)
+#   - final clean up of initial version
+#   - data transfer performance tweaking
+#   - better handling of really big blobs[^1]?
 #
+# [^1]: blob = binary large object
+
 
 import socket
 import threading
@@ -46,8 +49,18 @@ import select
 from time import sleep
 import warnings
 
-STIMEOUT = 0.050
-#STIMEOUT = 2.0 # SLOW DEBUGGING MODE 
+
+
+STIMEOUT = 0.010 # This delay (in seconds) limits the rate with which new
+                 # blocks are sent/received/processed. Reducing it further
+                 # may speed up the rate of blocks sent/recvd, but will
+                 # likely increase processor usage. It is not clear if there is
+                 # a lower limit. 
+                 # 
+                 #
+#STIMEOUT = 2.0   # SLOW DEBUGGING MODE 
+
+QUEUELEN = 20
 
 BLOCKIDCODE = b'\xDE\xCA\xFE\xCA\xFE'
 INTTYPECODE = b'\x01'
@@ -55,6 +68,7 @@ FLOATTYPECODE = b'\x11'
 STRTYPECODE = b'\x21'
 RAWBYTESTYPECODE = b'\x81'
 HEADLEN = 14 # calculated by hand (5 + 1 + 4 + 4 bytes)
+
 
 
 class Connection:
@@ -78,14 +92,12 @@ class Connection:
         self.auto_restart = auto_restart
         self.connected = sock != None
         self.adr = 0
-        self.in_q = queue.Queue(10)
-        self.out_q = queue.Queue(10)
-        self.block_q = queue.Queue(10)
-        self.out_block_q = queue.Queue(10)
+        self.in_q = queue.Queue(QUEUELEN)
+        self.out_q = queue.Queue(QUEUELEN)
+        self.block_q = queue.Queue(QUEUELEN)
+        self.out_block_q = queue.Queue(QUEUELEN)
         self.stop_sig = False
-        # some of the following events are not used anymore #TODO clean up
-        self.ackEvent = threading.Event()
-        self.modeChangeEvent = threading.Event()
+        self.ackEvent = threading.Event() 
     
     def __iter__(self):
         """
@@ -94,7 +106,7 @@ class Connection:
         """
         try:
             while True:
-                yield self.in_q.get(timeout=0.01)
+                yield self.in_q.get(timeout=STIMEOUT)
         except queue.Empty:
             pass
 
@@ -135,7 +147,6 @@ class Connection:
         """
         self.stop_sig = True
         self.ackEvent.set() #setting events to free the threads
-        self.modeChangeEvent.set()
         for t in self.threadSet:
             t.join()
         self.conn.close()
@@ -164,7 +175,7 @@ class Connection:
                     self.close()
                     self.connect(*self.adr)
                 except:
-                    sleep(0.5)
+                    sleep(0.5) #TODO replace this magic number with a defined constant
                 else:
                     break
             #warnings.warn("finished")
@@ -241,12 +252,14 @@ class Connection:
                     instate = 2 # switch state
                 else:
                     if (len(data) >= HEADLEN):
-                        # The received data is not a header.
-                        # Ignore this, reset input buffer, and wait for new
-                        # data.
-                        # Emit warning using warning.Warning #TODO
+                        # In case the received data is not a header:
+                        # Reset input buffer, and wait for new data.
+                        #
                         # This should actually never happen. If it happens,
-                        # we might need to do some kind of reset on the connection.
+                        # we might need to do some kind of reset on the
+                        # connection, and the reception queues
+                        # 
+                        #TODO Emit warning using warning.Warning
                         print('WARNING: Resetting chunk input buffer on Connection._inThread in serpy2.')
                         data = bytes() 
             
@@ -260,38 +273,44 @@ class Connection:
                     # more incoming data than needed, split data
                     # just take what is needed
                     bdata += data[0:bdata_remaining] 
+
+                    # Consistency check.
                     if len(bdata)!=datalenb:
                         print('len bdata = ',len(bdata))
                         print('bdata_remaining = ',bdata_remaining)
                         print('len data =',len(data))
                         print('datalenb =',datalenb)
                     assert len(bdata)==datalenb, 'Programmer Error. Incorrect length calculations.'
+
                     # and put the rest in updated databuffer
                     data = data[bdata_remaining:]
                 else:
-                    # too little data or just enough data to fill block
+                    # Too little data or just enough data to fill block:
+                    # Add all received data to block.
                     bdata += data
-                    assert len(bdata)<=datalenb, 'Programmer error. Have him fix this.'
+                    assert len(bdata)<=datalenb, 'Programmer error. Something wrong with data size calculations.'
                     data = bytes() # empty data input buffer
-                # full block received?
+
                 if len(bdata) == datalenb:
-                    # check checksum
+                    # Full and complete block received!
+                    # Check the checksum.
                     incoming_checksum = sum(bdata) & 0xFFFFFFFF
                     if incoming_checksum == checksum:
-                        # Put block in queue
+                        # Put block in received blocks queue.
                         # The block is here just the data preceded with one byte
                         # indicating the datatype.
-                        # Rest of header is not transmitted.
+                        # Rest of header is not used anymore.
                         block = btype + bdata
                         self.block_q.put(block)
                     else:
-                        # Data error. How should we handle this correctly? 
+                        # Data error.
+                        # How should we handle this correctly? 
+                        #TODO
                         # For now, we print a warning and ignore, we do not
                         # put any information in the queue. Later, we could
                         # push a None or some ErrorType? which is then
                         # picked up in getData.
-                        #TODO
-                        print('WARNING: Checksum wrong on incoming data.')
+                        print('WARNING: Wrong checksum on incoming data.')
                     instate = 1
 
         
@@ -348,11 +367,9 @@ class Connection:
                 #     self.modeChangeEvent.wait()
                 #     self.out_mode = mode
                 
-                # non-blocking (the only implemented mode)
-                #TODO introduce blocking send
-                # should best be implemented probably 
-                # in the SendData via a join thread or
-                # wait for an empty queue event?
+                # The only implemented mode in serpy2:
+                # non-blocking/no-handshake                
+                #TODO introduce send with handshake?
                 
                 # encode header
                 checksum = sum(bdata) & 0xFFFFFFFF
@@ -394,17 +411,23 @@ class Connection:
         float: sent as ascii-encoded bytes after representation with float.hex()
         bytes: sent as raw data
         """
-        if type(data) == float:
+        
+        # `if type(data) is` vs `isinstance()`...
+        # See: https://switowski.com/blog/type-vs-isinstance
+        # Thanks to Arthur for pointing this out.
+        # Here, we choose the data to be necessarily *exactly* of the unmodified class.
+        # Subclasses not accepted. This behaviour can always be changed later on if required.
+        if type(data) is float:
             flhex = data.hex()
             bdata = flhex.encode('ascii')
             btype = FLOATTYPECODE
-        elif type(data) == int:
+        elif type(data) is int:
             bdata = data.to_bytes(8, 'little', signed = True)
             btype = INTTYPECODE
-        elif type(data) == str:
+        elif type(data) is str:
             bdata = data.encode('utf-8')
             btype = STRTYPECODE
-        elif type(data) == bytes:
+        elif type(data) is bytes:
             bdata = data
             btype = RAWBYTESTYPECODE
         else:
@@ -479,8 +502,10 @@ class Server:
                                                         [], [], STIMEOUT)
             for s in readable :
                 #TODO: handle the following as a proper Exception
+                # or have a better way of reacting to too many requests.
+                # At present, the server just completely gives up.
                 assert len(self.connections) <= self.nb_conn,\
-                    "too many connections on this Server!"
+                    "Too many connections on this Server! Aborting..."
                 conn, adr = s.accept()
                 #warnings.warn("Connection to ", adr, " accepted")
                 c = Connection(sock=conn)
