@@ -1,23 +1,27 @@
 # serpy
-Serpy is intended to provide an easy-to-use Python module for direct, low-overhead TCP/IP communications. It provides two classes and methods for synchronous and asynchronous (ordered) communication. No more worries about sockets, threads, queues and sudden disconnections. These are handled silently by Serpy.
+Serpy is intended to provide an easy-to-use and lightweight 'pure' Python module for direct, low-overhead TCP/IP communications. It provides two classes and methods for synchronous and asynchronous (ordered) communication. No more worries about sockets, threads, queues and sudden disconnections. These are handled silently by Serpy.
 
 Our interest in developing serpy is to use it for transfer of data between scientific instrumentation and data processing workstations. It has successfully been used to interface home-built photon counting electronics to a distant data acquisition workstation.
 
 ## Two versions: serpy and serpy2
-The `serpy2` module has been created on basis of the original `serpy`, conserving its philosophy, but implementing a different protocol that is not compatible with orginal `serpy`. The new protocol aims to be more efficient in terms of bandwidth and processing power. 
+The `serpy2` module has been created on basis of the original `serpy`, conserving its philosophy, but implementing a different protocol that is not compatible with orginal `serpy`. The new protocol, which does not yet feature hand-shaking, aims to be more efficient in terms of bandwidth and processing power, and is geared towards transfer of 'binary large objects' (blobs of bytes), such as images.
+
+At present, we keep both modules seperately. The ultimate goal is, of course, to have one single module that can be configured optimally for all use cases, and is fully student-proof.
 
 ## Installation
- - Make sure to have Python 3. Serpy only uses the Python standard library.
- - Simply put the `serpy` and/or `serpy2` foldersin the same folder of the Python script from which you want to import serpy (or serpy2).
+ - Make sure to have Python 3. Serpy only uses the Python standard library. `numpy` is needed for some of the `serpy2` test scripts.
+ - Simply put the `serpy` and/or `serpy2` folders in the same folder of the Python script from which you want to import serpy (or serpy2).
  
 ## Usage
 
 ### Example scripts
-There are at present two pairs of example scripts inside the `examples` folder. These act also as initial tests for the serpy/serpy2 code. `simpleBroadcast.py` / `simpleChat.py` work with the original `serpy`. `simpleBroadcast2.py` / `simpleChat2.py` work with `serpy2`. More examples are on the way, especially for testing `serpy2` (#todo).
+There are at present two pairs of example scripts inside the `examples` folder. These act also as initial tests for the serpy/serpy2 code. `simpleBroadcast.py` / `simpleChat.py` work with the original `serpy`. `simpleBroadcast2.py` / `simpleChat2.py` work with `serpy2`. 
+
+There are also pairs of client-server test scripts for `serpy2`.
 
 ***
 
-The information below pertains to original `serpy`. Usage of `serpy2` is very similar. More documentation needed (#todo).
+The information below pertains to original `serpy`. Usage of `serpy2` is very similar. More documentation needed (#todo). For now, refer to the example scripts and the `serpy2` code.
 
 ### Using Server
 ```Python3
