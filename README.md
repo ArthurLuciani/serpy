@@ -1,5 +1,5 @@
 # serpy
-Serpy is intended to provide an easy-to-use and lightweight 'pure' Python module for direct, low-overhead TCP/IP communications. It provides two classes and methods for synchronous and asynchronous (ordered) communication. No more worries about sockets, threads, queues and sudden disconnections. These are handled silently by Serpy.
+Serpy is intended to provide an easy-to-use and lightweight 'pure' Python module for direct, low-overhead TCP/IP communications. No more worries about sockets, threads, queues and sudden disconnections. These are handled silently by Serpy.
 
 Our interest in developing serpy is to use it for transfer of data between scientific instrumentation and data processing workstations. It has successfully been used to interface home-built photon counting electronics to a distant data acquisition workstation.
 
@@ -24,11 +24,12 @@ There are also pairs of client-server test scripts for `serpy2`.
 The information below pertains to original `serpy`. Usage of `serpy2` is very similar. More documentation needed (#todo). For now, refer to the example scripts and the `serpy2` code.
 
 ### Using Server
+#### Start the server
 ```Python3
 s = Server(adr, port, nb_conn, encoding).start()
 ```
-### Retrieving the child Connection objects from the Server 
-When a socket connects itself with the server, the server creates a connection object with the new socket it has created. To retrieve those Connection objects there are several methods
+#### Retrieving the child Connection objects on the server 
+When a client connects itself with the server, the server creates a connection object with the new socket it has created. To retrieve those Connection objects there are several methods
  - `Server.getConnection()` :
  Returns a new Connection object from the new connection queue. This method will block if there is no new connection in queue
  ```Python3
@@ -45,12 +46,14 @@ conn_list = s.getConnectionsList()
 conn_list = s.readableConnections()
 ```
 
-### Closing the server
+#### Closing the server
  - `Server.close()` method : Will close the server. Won't close any child Connection. Won't accept any new connection. Cannot be restarted. Won't cleanup broken connections out of the Connection list
 
  - `Server.closeServer()` method : Will close all the child Connection objects and then close itself.
 
-### Making a connection to a server
+### Client(s)
+
+#### Making a connection to a server
 
 ```Python3
 c = Connection().connect(adr, port)
@@ -66,7 +69,9 @@ One can also specify the encoding it should use if string objects are passed to 
 c = Connection(encoding='utf-8').connect(adr, port)
 ```
 
-### Receiving data
+### Data transfer between client and server via an established Connection
+
+#### Receiving data from a Connection
 Use the Connection.getData method. This method will block until either data is received or an optional timeout is met.The received data will be in bytes.
 The optional timeout must be a number of seconds (float; int might work)
 ```Python3
@@ -74,7 +79,7 @@ c.getData(timeout=1.0)
 ```
 On timeout will raise the queue.Empty exception
 
-### Sending data
+#### Sending data
 To send data use the Connection.sendData method. Several modes are available:
  - mode 0 (default) : the data will just be sent as is without blocking (except if the internal queue is full)
  - mode 1 : the data will be sent and the method will block until acknowledgment
@@ -85,7 +90,7 @@ An optional timeout may be specified. The method may block for up to 2\*timeout.
 c.sendData(data, mode=0, timeout=None)
 ```
 
-### Closing a connection
+#### Closing a connection
 Use the `Connection.close()` method
 
 
